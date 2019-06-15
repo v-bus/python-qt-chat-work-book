@@ -1,10 +1,11 @@
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor
-
+import uuid
 
 class Client(Protocol):
     ip: str = None
     login: str = None
+    uuid: str = None
     factory: 'Chat'
 
     def __init__(self, factory):
@@ -14,19 +15,59 @@ class Client(Protocol):
         """
         self.factory = factory
 
+    def __count_login_in_clients__(self, login: str):
+        """
+        К домашке
+        Counts login string in self.factory.clients list
+        :return: Counter of self.logins by login, 0 if none, -1 if error expected
+        """
+        res_count_login = 0
+
+        try:
+            if len(self.factory.clients):
+                for next_client in self.factory.clients:
+                    if login == next_client.login:
+                        res_count_login += 1
+
+            return res_count_login
+        except:
+            return -1
+
+
+
+    def __user_exists__(self):
+        """
+        К домашке
+        Check user's login in client list
+        :return: True when exists otherwise False
+        """
+        is_user_exists = False
+
+        if len(self.factory.clients) > 0:
+            print(f"Server is checking new user {self.login} with IP {self.ip}...\n ")
+
+            user_login_count = self.__count_login_in_clients__(self.login)
+            print(f"Users with login {self.login} are {user_login_count}\n")
+
+            is_user_exists = user_login_count >= 2
+
+            if is_user_exists:
+                print(f"User {self.login} has been registered earlier and can not be registered again\n")
+            else:
+                print(f"Registering user {self.login}...\n")
+
+        return is_user_exists
+
     def connectionMade(self):
         """
         Обработчик подключения нового клиента
         """
         self.ip = self.transport.getHost().host
+        self.uuid = uuid.uuid4()
+
+        print(f"Client connected: {self.ip} and uuid {self.uuid}")
         self.factory.clients.append(self)
-
-        # print(f"Client connected: {self.ip}")
-        print(f"New user was connected ...")
-
-        # self.transport.write("New user was connected ...\n")
-        self.transport.write("New user was connected ...\n".encode())
-
+        self.transport.write(f"New user was connected with IP {self.ip} and uuid {self.uuid}\n".encode())
 
     def dataReceived(self, data: bytes):
         """
@@ -44,21 +85,29 @@ class Client(Protocol):
             if message.startswith("login:"):
                 self.login = message.replace("login:", "")
 
-                notification = f"New user connected: {self.login}"
-
-                self.factory.notify_all_users(notification)
-                print(notification)
+                """
+                Тут дальше ДЗ
+                """
+                if not self.__user_exists__():
+                    notification = f"New user connected: {self.login}"
+                    self.factory.notify_all_users(notification)
+                    print(notification)
+                else:
+                    print(f"Unrestered dubplicate user {self.login}")
+                    print(f"Connection uuid {self.uuid} will be terminated \n")
+                    self.transport.abortConnection()
+                    print(f"Connection have been terminated \n")
             else:
                 print("Error: Invalid client login")
-
 
     def connectionLost(self, reason=None):
         """
         Обработчик отключения клиента
         :param reason:
         """
-        self.factory.clients.remove(self)
-        print(f"Client disconnected: {self.ip}")
+        if self.factory.clients.count(self) > 0:
+            self.factory.clients.remove(self)
+        print(f"Client disconnected: {self.ip} and uuid {self.uuid}")
 
 
 class Chat(Factory):
