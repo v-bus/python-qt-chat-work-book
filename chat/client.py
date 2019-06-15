@@ -11,7 +11,11 @@ class DataWrapper(Protocol):
         :param data:
         :return:
         """
-        if data.decode() == 'exit\n':
+        if (data.decode() == 'exit\n') :
+            reactor.callFromThread(reactor.stop)
+
+        if data.decode().find('Unrestered dubplicate user')>0:
+            self.output.write(data)
             reactor.callFromThread(reactor.stop)
 
         if self.output:

@@ -1,12 +1,22 @@
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor
 import uuid
+import logging
+
+"""
+second task homework imports
+
+"""
+
+from chat.client_history import ClientRecord
+from chat.client_history import ClientHistory
 
 class Client(Protocol):
     ip: str = None
     login: str = None
     uuid: str = None
     factory: 'Chat'
+    client_history_store: ClientHistory
 
     def __init__(self, factory):
         """
@@ -14,6 +24,7 @@ class Client(Protocol):
         :param factory:
         """
         self.factory = factory
+        self.client_history_store = ClientHistory
 
     def __count_login_in_clients__(self, login: str):
         """
@@ -75,10 +86,20 @@ class Client(Protocol):
         :param data:
         """
         message = data.decode().replace('\n', '')
+        cur_record: ClientRecord = ClientRecord()
+
 
         if self.login is not None:
             server_message = f"{self.login}: {message}"
             self.factory.notify_all_users(server_message)
+
+            # second task homework
+            cur_record.client_ip = self.ip
+            cur_record.client_uuid = self.uuid
+            cur_record.client_login = self.login
+            cur_record.client_data = server_message
+
+            self.client_history_store.add_record(self.client_history_store, record=cur_record)
 
             print(server_message)
         else:
@@ -91,9 +112,17 @@ class Client(Protocol):
                 if not self.__user_exists__():
                     notification = f"New user connected: {self.login}"
                     self.factory.notify_all_users(notification)
+
+                    user_index = self.factory.clients.index(self)
+                    if user_index > 0:
+                        self.factory.clients[user_index].transport.write(self.client_history_store.to_str(self).encode())
+
                     print(notification)
                 else:
                     print(f"Unrestered dubplicate user {self.login}")
+                    user_index = self.factory.clients.index(self)
+                    if user_index > 0:
+                        self.factory.clients[user_index].transport.write(f"Unrestered dubplicate user {self.login}\n".encode())
                     print(f"Connection uuid {self.uuid} will be terminated \n")
                     self.transport.abortConnection()
                     print(f"Connection have been terminated \n")
@@ -146,5 +175,13 @@ class Chat(Factory):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(filename='server.log',
+                        filemode='w',
+                        format='%(asctime)s - %(name)s - %(levelname)s -- %(message)s',
+                        datefmt='%d-%b-%y %H:%M:%S',
+                        level=logging.ERROR)
+
+    logging.warning('This will get logged to a file')
+
     reactor.listenTCP(7410, Chat())
     reactor.run()
